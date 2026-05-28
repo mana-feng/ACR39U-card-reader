@@ -255,7 +255,7 @@ public class Sle {
 		getPcscConnection().sendApduCommand(apdu);
 		
 		if (apdu.getStatusWord()[0] != (byte)0x90)
-            throw new CardException("Write failed");
+            throw new CardException("写卡失败");
 	}
 	
 	public void writeProtectionBits(byte address, byte[] data, byte length) throws Exception

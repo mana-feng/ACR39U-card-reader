@@ -449,99 +449,99 @@ public class PcscProvider {
         	switch (CODES.getKeyNameErrorCode(ex.getCause().getMessage()))
             {
                 case SCARD_E_CANCELLED:
-                    return ("The action was canceled by an SCardCancel request.");
+                    return ("操作被取消。");
                 case SCARD_E_CANT_DISPOSE:
-                    return ("The system could not dispose of the media in the requested manner.");
+                    return ("系统无法释放资源。");
                 case SCARD_E_CARD_UNSUPPORTED:
-                    return ("The smart card does not meet minimal requirements for support.");
+                    return ("卡片不满足最低支持要求。");
                 case SCARD_E_DUPLICATE_READER:
-                    return ("The reader driver didn't produce a unique reader name.");
+                    return ("读卡器驱动未能产生唯一的读卡器名称。");
                 case SCARD_E_INSUFFICIENT_BUFFER:
-                    return ("The data buffer for returned data is too small for the returned data.");
+                    return ("数据缓冲区太小。");
                 case SCARD_E_INVALID_ATR:
-                    return ("An ATR string obtained from the registry is not a valid ATR string.");
+                    return ("ATR 字符串无效。");
                 case SCARD_E_INVALID_HANDLE:
-                    return ("The supplied handle was invalid.");
+                    return ("提供的句柄无效。");
                 case SCARD_E_INVALID_PARAMETER:
-                    return ("One or more of the supplied parameters could not be properly interpreted.");
+                    return ("提供的参数无法正确解析。");
                 case SCARD_E_INVALID_TARGET:
-                    return ("Registry startup information is missing or invalid.");
+                    return ("注册表启动信息缺失或无效。");
                 case SCARD_E_INVALID_VALUE:
-                    return ("One or more of the supplied parameter values could not be properly interpreted.");
+                    return ("提供的参数值无法正确解析。");
                 case SCARD_E_NOT_READY:
-                    return ("The reader or card is not ready to accept commands.");
+                    return ("读卡器或卡片未就绪，无法接受指令。");
                 case SCARD_E_NOT_TRANSACTED:
-                    return ("An attempt was made to end a non-existent transaction.");
+                    return ("尝试结束一个不存在的交易。");
                 case SCARD_E_NO_MEMORY:
-                    return ("Not enough memory available to complete this command.");
+                    return ("内存不足，无法完成此指令。");
                 case SCARD_E_NO_SERVICE:
-                    return ("The smart card resource manager is not running.");
+                    return ("读卡器资源管理器未运行。");
                 case SCARD_E_NO_SMARTCARD:
-                    return ("The operation requires a smart card, but no smart card is currently in the device.");
+                    return ("操作需要卡片，但设备中未检测到卡片。");
                 case SCARD_E_PCI_TOO_SMALL:
-                    return ("The PCI receive buffer was too small.");
+                    return ("PCI 接收缓冲区太小。");
                 case SCARD_E_PROTO_MISMATCH:
-                    return ("The requested protocols are incompatible with the protocol currently in use with the card.");
+                    return ("请求的协议与卡片当前使用的协议不兼容。");
                 case SCARD_E_READER_UNAVAILABLE:
-                    return ("Cannot find a smart card reader.");
+                    return ("未找到读卡器。");
                 case SCARD_E_READER_UNSUPPORTED:
-                    return ("The reader driver does not meet minimal requirements for support.");
+                    return ("读卡器驱动不满足最低支持要求。");
                 case SCARD_E_SERVICE_STOPPED:
-                    return ("The smart card resource manager has shut down.");
+                    return ("卡片资源管理器已关闭。");
                 case SCARD_E_SHARING_VIOLATION:
-                    return ("The smart card cannot be accessed because of other outstanding connections.");
+                    return ("由于存在其他连接，无法访问卡片。");
                 case SCARD_E_SYSTEM_CANCELLED:
-                    return ("The action was canceled by the system, presumably to log off or shut down.");
+                    return ("操作被系统取消，可能是由于注销或关机。");
                 case SCARD_E_TIMEOUT:
-                    return ("The user-specified timeout value has expired.");
+                    return ("操作超时。");
                 case SCARD_E_UNKNOWN_CARD:
-                    return ("The specified smart card name is not recognized.");
+                    return ("无法识别的卡片名称。");
                 case SCARD_E_UNKNOWN_READER:
-                    return ("The specified reader name is not recognized.");
+                    return ("无法识别的读卡器名称。");
                 case SCARD_E_NO_READERS_AVAILABLE:
-                    return ("Cannot find a smart card reader.");
+                    return ("未找到读卡器。");
                 case SCARD_F_COMM_ERROR:
-                    return ("An internal communications error has been detected.");
+                    return ("检测到内部通信错误。");
                 case SCARD_F_INTERNAL_ERROR:
-                    return ("An internal consistency check failed.");
+                    return ("内部一致性检查失败。");
                 case SCARD_F_UNKNOWN_ERROR:
-                    return ("An internal error has been detected, but the source is unknown.");
+                    return ("检测到内部错误，来源未知。");
                 case SCARD_F_WAITED_TOO_LONG:
-                    return ("An internal consistency timer has expired.");
+                    return ("内部一致性计时器已超时。");
                 case SCARD_S_SUCCESS:
-                    return ("No error was encountered.");
+                    return ("没有发生任何错误。");
                 case SCARD_E_DIR_NOT_FOUND:
-                    return ("The identified directory does not exist in the smart card..");
+                    return ("卡片中不存在指定的目录。");
                 case SCARD_W_RESET_CARD:
-                    return ("The smart card has been reset, so any shared state information is invalid.");
+                    return ("卡片已被重置，共享状态信息无效。");
                 case SCARD_W_UNPOWERED_CARD:
-                    return ("Power has been removed from the smart card, so that further communication is not possible.");
+                    return ("卡片未供电，无法继续通信。");
                 case SCARD_W_UNRESPONSIVE_CARD:
-                    return ("The smart card is not responding to a reset.");
+                    return ("卡片未响应复位指令。");
                 case SCARD_W_UNSUPPORTED_CARD:
-                    return ("The reader cannot communicate with the card, due to ATR string configuration conflicts.");
+                    return ("由于 ATR 配置冲突，读卡器无法与卡片通信。");
                 case SCARD_W_REMOVED_CARD:
-                    return ("The smart card has been removed, so further communication is not possible.");
+                    return ("卡片已被移除，无法继续通信。");
                 case ACS_NFC_ERR_IO:
-                    return ("Device Error");
+                    return ("设备错误");
                 case ACS_NFC_ERR_INVALID:
-                    return ("Parameter Invalid");
+                    return ("参数错误");
                 case ACS_NFC_ERR_DEV_NOT_SUPP:
-                    return ("Device Mode not support the feature");
+                    return ("设备模式不支持该功能");
                 case ACS_NFC_ERR_NOT_SUCH_DEV:
-                    return ("Destinate Device not find");
+                    return ("未找到指定设备");
                 case ACS_NFC_ERR_NOT_DATA:
-                    return ("Response cannot receive");
+                    return ("无法收到卡片回复");
                 case ACS_NFC_ERR_TIMEOUT:
-                    return ("Timeout occurs");
+                    return ("操作超时");
                 case ACS_NFC_ERR_FAIL:
-                    return ("NFC Error Occurs");
+                    return ("发生 NFC 错误");
                 case ACS_NFC_ERR_RF_TRANS:
-                    return ("Data Received not follow ISO18092");
+                    return ("收到的数据不符合 ISO18092 标准");
                 case ACS_NFC_ERR_SOFT:
-                    return ("Unknown Error");
+                    return ("未知错误");
                 default:
-                    return ("(" + ex.getCause().getMessage() + ") Undocumented error");
+                    return ("(" + ex.getCause().getMessage() + ") 未记录的错误");
             }
         }
         

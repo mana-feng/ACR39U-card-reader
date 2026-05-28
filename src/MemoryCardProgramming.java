@@ -674,7 +674,7 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
             atr = _acr39x.getAtr();
             cardName = cardSelector.readCardType(atr);
 
-            if (cardName != "Memory Card") {
+            if (cardName != "存储卡") {
                 showErrorMessage("不支持的卡片.\r\n请使用 " + _ComboBoxCardTypeList.getSelectedItem().toString() + " 卡.");
                 return false;
             }
@@ -1525,36 +1525,36 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
 
     private void getProtocolType(Sle.PROTOCOL_TYPE protocolType) {
         if (protocolType == Sle.PROTOCOL_TYPE.SERIAL_DATA)
-            addMessageToLog("协议类型: Serial Data Access");
+            addMessageToLog("协议类型: 串行数据访问");
         else if (protocolType == Sle.PROTOCOL_TYPE.THREE_WIRE)
-            addMessageToLog("协议类型: 3-Wire Bus");
+            addMessageToLog("协议类型: 三线总线");
         else if (protocolType == Sle.PROTOCOL_TYPE.TWO_WIRE)
-            addMessageToLog("协议类型: 2-Wire Bus");
+            addMessageToLog("协议类型: 二线总线");
         else if (protocolType == Sle.PROTOCOL_TYPE.RFU)
-            addMessageToLog("协议类型: RFU");
+            addMessageToLog("协议类型: 保留");
         else if (protocolType == Sle.PROTOCOL_TYPE.RESERVED_MAX)
-            addMessageToLog("协议类型: Reserved for ISO");
+            addMessageToLog("协议类型: ISO 保留");
         else if (protocolType == Sle.PROTOCOL_TYPE.NOT_DEFINED_MAX)
-            addMessageToLog("协议类型: Not defined by ISO");
+            addMessageToLog("协议类型: ISO 未定义");
         else
             addMessageToLog("协议类型: 未知");
     }
 
     private void getDataUnits(Sle.DATA_UNITS dataUnits) {
         if (dataUnits == Sle.DATA_UNITS.BYTES_128)
-            addMessageToLog("数据单元: 128 Bytes");
+            addMessageToLog("数据单元: 128 字节");
         else if (dataUnits == Sle.DATA_UNITS.BYTES_256)
-            addMessageToLog("数据单元: 256 Bytes");
+            addMessageToLog("数据单元: 256 字节");
         else if (dataUnits == Sle.DATA_UNITS.BYTES_512)
-            addMessageToLog("数据单元: 512 Bytes");
+            addMessageToLog("数据单元: 512 字节");
         else if (dataUnits == Sle.DATA_UNITS.BYTES_1024)
-            addMessageToLog("数据单元: 1024 Bytes");
+            addMessageToLog("数据单元: 1024 字节");
         else if (dataUnits == Sle.DATA_UNITS.BYTES_2048)
-            addMessageToLog("数据单元: 2048 Bytes");
+            addMessageToLog("数据单元: 2048 字节");
         else if (dataUnits == Sle.DATA_UNITS.BYTES_4096)
-            addMessageToLog("数据单元: 4096 Bytes");
+            addMessageToLog("数据单元: 4096 字节");
         else if (dataUnits == Sle.DATA_UNITS.NO_INDICATION)
-            addMessageToLog("数据单元: Not Indicated");
+            addMessageToLog("数据单元: 未指定");
         else
             addMessageToLog("数据单元: 未知");
     }

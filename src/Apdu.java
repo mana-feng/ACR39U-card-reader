@@ -70,7 +70,7 @@ public class Apdu
      public void setCommand(byte[] command) throws Exception
      {
     	 if(command.length != VALID_COMMAND_LENGTH)
-    		 throw new Exception("Invalid command");
+    		 throw new Exception("无效指令");
     	 
     	 setCla(command[0]);
     	 setIns(command[1]);

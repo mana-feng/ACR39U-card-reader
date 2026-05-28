@@ -30,9 +30,9 @@ public class MainApplet extends JApplet implements ActionListener
 		_ButtonMemoryCardProgramming.setFont(new Font("Verdana", Font.PLAIN, 10));
 		_ButtonMemoryCardProgramming.setBounds(10, 44, 250, 23);
 
-		_ButtonMemoryCardProgramming.setText("SLE Memory Card Programming");
+		_ButtonMemoryCardProgramming.setText("SLE 存储卡编程");
         
-        JLabel LabelMemoryCardProgramming = new JLabel("SLE Memory Card Programming");
+        JLabel LabelMemoryCardProgramming = new JLabel("SLE 存储卡编程");
         LabelMemoryCardProgramming.setHorizontalAlignment(SwingConstants.CENTER);
         LabelMemoryCardProgramming.setFont(new Font("Verdana", Font.PLAIN, 10));
         LabelMemoryCardProgramming.setBounds(10, 19, 250, 14);

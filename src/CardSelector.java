@@ -39,7 +39,7 @@ public class CardSelector {
 				switch(cardIdentifier[1])
 				{
 					case 0:
-						cardName = "Unknown";
+						cardName = "未知";
 						break;
 					case 1:
 						cardName = "Mifare Standard 1K";
@@ -222,13 +222,13 @@ public class CardSelector {
 						cardName = "Mifare Ultralight EV1";
 						break;
 					default:
-						cardName = "Unknown";
+						cardName = "未知";
 						break;
 				}
 			}
 			else
 			{
-				cardName = "Unknown";
+				cardName = "未知";
 			}			
 		}
 		else // Part 4
@@ -240,7 +240,7 @@ public class CardSelector {
 			}
 			else if (atr[4] == (byte) 0x10)
 			{
-				cardName = "Memory Card";
+				cardName = "存储卡";
 			}
 			else
 			{
