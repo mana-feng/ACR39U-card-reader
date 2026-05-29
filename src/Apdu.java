@@ -14,9 +14,7 @@ public class Apdu
      private byte[] _sendData;
      private byte[] _receiveData;
      private byte[] _statusWord;
-     
-     int _counter;
-     
+
      public Apdu()
      {
     	 _lengthExpected = 0;
@@ -86,7 +84,7 @@ public class Apdu
     	 if(getStatusWord() == null)
     		 return false;
     	 
-    	 for(_counter = 0; _counter < getStatusWord().length; _counter++)
+    	 for(int _counter = 0; _counter < getStatusWord().length; _counter++)
     		 if(getStatusWord()[_counter] != data[_counter])
     			 return false;
     	 

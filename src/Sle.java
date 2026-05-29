@@ -96,20 +96,9 @@ public class Sle {
 	}
 	
 	public PcscReader getPcscConnection() { return _pcscConnection; }
-    public void setAutoPiccPolling(PcscReader value) { this._pcscConnection = value; }
-    
-	@SuppressWarnings("unused")
-	private String getErrorMessage(byte[ ] statusWord)
-    {
-    	if (statusWord.length < STATUS_WORD_LENGTH)
-    		return "未知的状态码 (" + Helper.byteAsString(statusWord, false) + ")";
-    	else if (statusWord[0] == (byte)0x63 && statusWord[1] == (byte)0x00)
-    		return "传送指令失败";
-    	else
-    		return "位置的状态码 (" + Helper.byteAsString(statusWord, false) + ")";
-    }
-	
-	public void selectCardType(CARD_TYPE selectedCardType) throws Exception
+    public void setPcscConnection(PcscReader value) { this._pcscConnection = value; }
+
+    public void selectCardType(CARD_TYPE selectedCardType) throws Exception
 	{
 		Apdu apdu;
 		
@@ -228,7 +217,6 @@ public class Sle {
 		
 		apdu = new Apdu();
 		apdu.setCommand(new byte[] { (byte) 0xFF, (byte) 0xD0, 0x00, address, length });
-		apdu.setSendData(new byte[data.length]);
 		apdu.setSendData(Arrays.copyOf(data, length & 0xFF));
 		
 		getPcscConnection().sendApduCommand(apdu);
@@ -249,7 +237,6 @@ public class Sle {
 		
 		apdu = new Apdu();
 		apdu.setCommand(new byte[] { (byte) 0xFF, (byte) 0xD0, address[0], address[1], length });
-		apdu.setSendData(new byte[data.length]);
 		apdu.setSendData(Arrays.copyOf(data, length & 0xFF));
 		
 		getPcscConnection().sendApduCommand(apdu);
@@ -267,7 +254,6 @@ public class Sle {
 		
 		apdu = new Apdu();
 		apdu.setCommand(new byte[] { (byte) 0xFF, (byte) 0xD1, 0x00, address, length });
-		apdu.setSendData(new byte[data.length]);
 		apdu.setSendData(Arrays.copyOf(data, length & 0xFF));
 		
 		getPcscConnection().sendApduCommand(apdu);
@@ -288,7 +274,6 @@ public class Sle {
 		
 		apdu = new Apdu();
 		apdu.setCommand(new byte[] { (byte) 0xFF, (byte) 0xD1, address[0], address[1], length });
-		apdu.setSendData(new byte[data.length]);
 		apdu.setSendData(Arrays.copyOf(data, length & 0xFF));
 		
 		getPcscConnection().sendApduCommand(apdu);
@@ -302,7 +287,6 @@ public class Sle {
 		Apdu apdu = new Apdu();
 		
 		apdu.setCommand(new byte[] { (byte) 0xFF, (byte) 0x20, 0x00, 0x00, (byte)code.length });
-		apdu.setSendData(new byte[code.length]);
 		apdu.setSendData(code);
 		
 		getPcscConnection().sendApduCommand(apdu);
@@ -318,7 +302,6 @@ public class Sle {
 		Apdu apdu = new Apdu();
 		
 		apdu.setCommand(new byte[] { (byte) 0xFF, (byte) 0xD2, 0x00, 0x01, 0x03 });
-		apdu.setSendData(new byte[code.length]);
 		apdu.setSendData(code);
 		
 		getPcscConnection().sendApduCommand(apdu);

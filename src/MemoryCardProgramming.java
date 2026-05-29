@@ -1,24 +1,23 @@
 
 
 import java.awt.*;
+import java.awt.KeyEventDispatcher;
+import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
-import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
-import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.io.File;
 import java.text.ParseException;
-import java.util.BitSet;
-import javax.smartcardio.CardException;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
-import javax.swing.filechooser.FileFilter;
-import java.awt.event.KeyListener;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.PlainDocument;
 
 @SuppressWarnings("serial")
 public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITransmitApduHandler, KeyListener {
@@ -57,38 +56,29 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
     /*********** PANEL ***********/
     private JPanel _ContentPanel;
     private JPanel _PanelCode;
-    private JPanel _PanelReadWriteMemoryCard;
-    private JPanel _PanelProtectionBits;
+    private JPanel _PanelDataArea;
 
     /*********** SCROLLAREA ***********/
-    private JScrollPane _ScrollPanelDataMemoryCard;
-    private JScrollPane _ScrollPanelDataProtectionBits;
-    private JScrollPane _ScrollPanelProtectionBits;
+    private JScrollPane _ScrollPanelDataGrid;
     private JScrollPane _ScrollPanelApduLogs;
 
+    /*********** GRID ***********/
+    private JPanel _PanelDataGrid;
+    private final JTextField[][] _DataGrid = new JTextField[16][16];
+    private final boolean[][] _gridSelected = new boolean[16][16];
+    private int _selRowStart = -1, _selColStart = -1;
+    private int _selRowEnd = -1, _selColEnd = -1;
+    private int _dragRowAnchor = -1, _dragColAnchor = -1;
+
     /*********** TEXTAREA ***********/
-    private JTextArea _TextAreaDataProtectionBits;
-    private JTextArea _TextAreaDataMemoryCard;
-    private JTextArea _TextAreaProtectionBits;
     private JTextArea _TextAreaApduLogs;
 
     /*********** LABEL ***********/
-    private JLabel _LabelAddress;
     private JLabel _LabelApduLogs;
     private JLabel _LabelCode;
-    private JLabel _LabelData;
-    private JLabel _LabelLength;
-    private JLabel _LabelProtectionBits;
     private JLabel _LabelRetriesLeft;
-    private JLabel _LabelSecurityAddress;
-    private JLabel _LabelSecurityLength;
-    private JLabel _LabelDataProtectionBits;
     private JLabel _LabelSelectCard;
     private JLabel _LabelSelectReader;
-
-    private JFileChooser chooser;
-    private JFrame fileinframe;
-    private JFrame fileoutframe;
 
     // *************************************************************************************************//
 
@@ -98,62 +88,15 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
 
     private final int SLE4418_SLE4428_SLE5528 = 0;
     private final int SLE4432_SLE4442_SLE5542 = 1;
-    private final int SLE5523_ERROR_COUNT = 8;
-    private final int SLE5542_ERROR_COUNT = 3;
-    private final int SLE5528_MAXIMUM_WRITEABLE_RANGE = 1021;
-    private final int SLE5528_MAXIMUM_READABLE_RANGE = 1024;
-    private final int SLE5528_MAXIMUM_PROTECTION_BITS_RANGE = 1024;
-    private final int SLE5542_MAXIMUM_WRITEABLE_RANGE = 256;
-    private final int SLE5542_MAXIMUM_READABLE_RANGE = 256;
-    private final int SLE5542_MAXIMUM_PROTECTION_BITS_RANGE = 32;
-    private final int PROTOCOL_TYPE_INDEX = 0;
-    private final int DATA_UNITS_INDEX = 1;
-    private final int IC_MANUFACTURER_ID_INDEX = 4;
-    private final int IC_TYPE_INDEX = 5;
-    private final int APPLICATION_ID_START_INDEX = 6;
-    private final int APPLICATION_ID_LENGTH = 6;
-
-    private byte[] data4428;
-    private byte[] data4442;
-    private byte[] data1 = new byte[255];
-    private byte[] data2 = new byte[255];
-    private byte[] data3 = new byte[255];
-    private byte[] data4 = new byte[255];
-    private byte[] data5 = new byte[1];
-
-    private byte[] add4428_1 = {(byte) 0x00, (byte) 0x00};
-    private byte[] add4428_2 = {(byte) 0x00, (byte) 0xff};
-    private byte[] add4428_3 = {(byte) 0x01, (byte) 0xfe};
-    private byte[] add4428_4 = {(byte) 0x02, (byte) 0xfd};
-    private byte[] add4428_5 = {(byte) 0x03, (byte) 0xfc};
-
-    private byte add4442_1 = (byte) 0x00;
-    private byte add4442_2 = (byte) 0xff;
 
     /*********** GLOBAL VARIABLES ***********/
     private boolean _isConnectionActive;
 
     private Acr39 _acr39x;
-    private Sle _sle;
-    private Apdu apdu;
+    private MemoryCardFileHandler _fileHandler;
+    private MemoryCardValidator _validator;
+    private MemoryCardOperations _operations;
     
-    public enum CARD_OPERATIONS {
-        WRITE_MEMORY_CARD(0),
-        READ_MEMORY_CARD(1),
-        WRITE_PROTECTION_BITS(2),
-        READ_PROTECTION_BITS(3);
-
-        private final int ID;
-
-        CARD_OPERATIONS(int id) {
-            this.ID = id;
-        }
-
-        public int getCardOperation() {
-            return ID;
-        }
-    }
-
     // *************************************************************************************************//
 
     /**
@@ -170,6 +113,7 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
                 }
             }
         });
+
     }
 
     /**
@@ -182,7 +126,7 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
         setTitle("ACR39U读写软件 ---- mananfeng.com");
         setResizable(false);
         setFont(new Font("宋体", Font.PLAIN, 10));
-        setBounds(100, 100, 874, 792);
+        setBounds(100, 100, 1260, 970);
         getContentPane().setLayout(null);
 
         Image im = new ImageIcon(MemoryCardProgramming.class.getResource("ACS_logo.png")).getImage();
@@ -316,184 +260,151 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
         _ButtonReadErrorCounter.setVerticalAlignment(SwingConstants.TOP);
         _ButtonReadErrorCounter.setFont(new Font("宋体", Font.PLAIN, 14));
 
-        _PanelReadWriteMemoryCard = new JPanel();
-        _PanelReadWriteMemoryCard.setLayout(null);
-        _PanelReadWriteMemoryCard.setEnabled(false);
-        _PanelReadWriteMemoryCard.setBorder(new TitledBorder(null, "读写普通存储区", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-        _PanelReadWriteMemoryCard.setBounds(6, 263, 415, 223);
-        ((TitledBorder) _PanelReadWriteMemoryCard.getBorder()).setTitleFont(new Font("宋体", Font.BOLD, 16));
-        getContentPane().add(_PanelReadWriteMemoryCard);
+        _PanelDataArea = new JPanel();
+        _PanelDataArea.setLayout(null);
+        _PanelDataArea.setBorder(new TitledBorder(null, "数据区", TitledBorder.LEADING, TitledBorder.TOP, null, null));
+        _PanelDataArea.setBounds(6, 263, 825, 640);
+        ((TitledBorder) _PanelDataArea.getBorder()).setTitleFont(new Font("宋体", Font.BOLD, 16));
+        getContentPane().add(_PanelDataArea);
 
-        _LabelAddress = new JLabel("地址");
-        _LabelAddress.setBounds(26, 23, 68, 18);
-        _PanelReadWriteMemoryCard.add(_LabelAddress);
-        _LabelAddress.setHorizontalAlignment(SwingConstants.RIGHT);
-        _LabelAddress.setFont(new Font("宋体", Font.BOLD, 14));
+        JLabel labelNormal = new JLabel("普通存储区");
+        labelNormal.setFont(new Font("宋体", Font.BOLD, 13));
+        labelNormal.setBounds(10, 22, 85, 20);
+        _PanelDataArea.add(labelNormal);
+
+        JLabel labelAddr1 = new JLabel("地址");
+        labelAddr1.setFont(new Font("宋体", Font.BOLD, 13));
+        labelAddr1.setBounds(105, 22, 35, 20);
+        _PanelDataArea.add(labelAddr1);
 
         _TextFieldAddress1 = new JTextField();
         _TextFieldAddress1.setHorizontalAlignment(SwingConstants.CENTER);
-        _TextFieldAddress1.setBounds(104, 20, 45, 25);
-        _PanelReadWriteMemoryCard.add(_TextFieldAddress1);
-        _TextFieldAddress1.setText("");
         _TextFieldAddress1.setFont(new Font("Verdana", Font.PLAIN, 13));
+        _TextFieldAddress1.setBounds(145, 20, 45, 25);
+        _PanelDataArea.add(_TextFieldAddress1);
 
         _TextFieldAddress2 = new JTextField();
         _TextFieldAddress2.setHorizontalAlignment(SwingConstants.CENTER);
-        _TextFieldAddress2.setBounds(159, 20, 45, 25);
-        _PanelReadWriteMemoryCard.add(_TextFieldAddress2);
-        _TextFieldAddress2.setText("");
         _TextFieldAddress2.setFont(new Font("Verdana", Font.PLAIN, 13));
+        _TextFieldAddress2.setBounds(195, 20, 45, 25);
+        _PanelDataArea.add(_TextFieldAddress2);
+
+        JLabel labelLen1 = new JLabel("长度");
+        labelLen1.setFont(new Font("宋体", Font.BOLD, 13));
+        labelLen1.setBounds(250, 22, 35, 20);
+        _PanelDataArea.add(labelLen1);
 
         _TextFieldLength = new JTextField();
         _TextFieldLength.setHorizontalAlignment(SwingConstants.CENTER);
-        _TextFieldLength.setBounds(340, 18, 45, 25);
-        _PanelReadWriteMemoryCard.add(_TextFieldLength);
-        _TextFieldLength.setText("");
         _TextFieldLength.setFont(new Font("Verdana", Font.PLAIN, 13));
-
-        _LabelLength = new JLabel("长度");
-        _LabelLength.setBounds(305, 24, 45, 17);
-        _PanelReadWriteMemoryCard.add(_LabelLength);
-        _LabelLength.setFont(new Font("宋体", Font.BOLD, 14));
-
-        _LabelData = new JLabel("数据");
-        _LabelData.setBounds(35, 64, 59, 18);
-        _PanelReadWriteMemoryCard.add(_LabelData);
-        _LabelData.setHorizontalAlignment(SwingConstants.RIGHT);
-        _LabelData.setFont(new Font("宋体", Font.BOLD, 14));
-
-        _ScrollPanelDataMemoryCard = new JScrollPane();
-        _ScrollPanelDataMemoryCard.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
-        _ScrollPanelDataMemoryCard.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        _ScrollPanelDataMemoryCard.setBounds(104, 63, 301, 79);
-        _PanelReadWriteMemoryCard.add(_ScrollPanelDataMemoryCard);
-
-        _TextAreaDataMemoryCard = new JTextArea();
-        _TextAreaDataMemoryCard.setText("");
-        _TextAreaDataMemoryCard.setLineWrap(true);
-        _TextAreaDataMemoryCard.setFont(new Font("宋体", Font.PLAIN, 13));
-        _ScrollPanelDataMemoryCard.setViewportView(_TextAreaDataMemoryCard);
+        _TextFieldLength.setBounds(290, 20, 45, 25);
+        _PanelDataArea.add(_TextFieldLength);
 
         _ButtonRead = new JButton("读");
-        _ButtonRead.setBounds(104, 152, 149, 26);
-        _PanelReadWriteMemoryCard.add(_ButtonRead);
         _ButtonRead.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                readMemoryCard();
-            }
+            public void actionPerformed(ActionEvent e) { readMemoryCard(); }
         });
-        _ButtonRead.setFont(new Font("宋体", Font.PLAIN, 15));
+        _ButtonRead.setFont(new Font("宋体", Font.PLAIN, 14));
+        _ButtonRead.setBounds(360, 18, 70, 26);
+        _PanelDataArea.add(_ButtonRead);
 
         _ButtonWrite = new JButton("写");
         _ButtonWrite.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                writeMemoryCard();
-            }
+            public void actionPerformed(ActionEvent e) { writeMemoryCard(); }
         });
-        _ButtonWrite.setBounds(256, 152, 149, 26);
-        _PanelReadWriteMemoryCard.add(_ButtonWrite);
-        _ButtonWrite.setFont(new Font("宋体", Font.PLAIN, 15));
+        _ButtonWrite.setFont(new Font("宋体", Font.PLAIN, 14));
+        _ButtonWrite.setBounds(440, 18, 70, 26);
+        _PanelDataArea.add(_ButtonWrite);
 
-        _PanelProtectionBits = new JPanel();
-        _PanelProtectionBits.setLayout(null);
-        _PanelProtectionBits.setEnabled(false);
-        _PanelProtectionBits.setBorder(new TitledBorder(null, "读写保护存储区", TitledBorder.LEADING, TitledBorder.TOP, null, null));
-        _PanelProtectionBits.setBounds(6, 489, 415, 253);
-        ((TitledBorder) _PanelProtectionBits.getBorder()).setTitleFont(new Font("宋体", Font.BOLD, 16));
-        getContentPane().add(_PanelProtectionBits);
+        _ButtonExportFile = new JButton("读卡并导出");
+        _ButtonExportFile.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { ExportFile(); }
+        });
+        _ButtonExportFile.setFont(new Font("宋体", Font.PLAIN, 14));
+        _ButtonExportFile.setBounds(535, 18, 115, 26);
+        _PanelDataArea.add(_ButtonExportFile);
+
+        _ButtonImportFile = new JButton("导入并写卡");
+        _ButtonImportFile.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { ImportFile(); }
+        });
+        _ButtonImportFile.setFont(new Font("宋体", Font.PLAIN, 14));
+        _ButtonImportFile.setBounds(665, 18, 115, 26);
+        _PanelDataArea.add(_ButtonImportFile);
+
+        JLabel labelProtected = new JLabel("保护存储区");
+        labelProtected.setFont(new Font("宋体", Font.BOLD, 13));
+        labelProtected.setBounds(10, 55, 85, 20);
+        _PanelDataArea.add(labelProtected);
+
+        JLabel labelAddr2 = new JLabel("地址");
+        labelAddr2.setFont(new Font("宋体", Font.BOLD, 13));
+        labelAddr2.setBounds(105, 55, 35, 20);
+        _PanelDataArea.add(labelAddr2);
 
         _TextFieldSecurityAddress1 = new JTextField();
         _TextFieldSecurityAddress1.setHorizontalAlignment(SwingConstants.CENTER);
-        _TextFieldSecurityAddress1.setBounds(104, 20, 45, 25);
-        _PanelProtectionBits.add(_TextFieldSecurityAddress1);
-        _TextFieldSecurityAddress1.setText("");
         _TextFieldSecurityAddress1.setFont(new Font("Verdana", Font.PLAIN, 13));
+        _TextFieldSecurityAddress1.setBounds(145, 53, 45, 25);
+        _PanelDataArea.add(_TextFieldSecurityAddress1);
 
         _TextFieldSecurityAddress2 = new JTextField();
         _TextFieldSecurityAddress2.setHorizontalAlignment(SwingConstants.CENTER);
-        _TextFieldSecurityAddress2.setBounds(159, 20, 45, 25);
-        _PanelProtectionBits.add(_TextFieldSecurityAddress2);
-        _TextFieldSecurityAddress2.setText("");
         _TextFieldSecurityAddress2.setFont(new Font("Verdana", Font.PLAIN, 13));
+        _TextFieldSecurityAddress2.setBounds(195, 53, 45, 25);
+        _PanelDataArea.add(_TextFieldSecurityAddress2);
 
-        _LabelSecurityAddress = new JLabel("地址");
-        _LabelSecurityAddress.setBounds(40, 23, 58, 20);
-        _PanelProtectionBits.add(_LabelSecurityAddress);
-        _LabelSecurityAddress.setHorizontalAlignment(SwingConstants.RIGHT);
-        _LabelSecurityAddress.setFont(new Font("宋体", Font.BOLD, 14));
+        JLabel labelLen2 = new JLabel("长度");
+        labelLen2.setFont(new Font("宋体", Font.BOLD, 13));
+        labelLen2.setBounds(250, 55, 35, 20);
+        _PanelDataArea.add(labelLen2);
 
         _TextFieldSecurityLength = new JTextField();
         _TextFieldSecurityLength.setHorizontalAlignment(SwingConstants.CENTER);
-        _TextFieldSecurityLength.setBounds(330, 20, 45, 25);
-        _PanelProtectionBits.add(_TextFieldSecurityLength);
-        _TextFieldSecurityLength.setText("");
         _TextFieldSecurityLength.setFont(new Font("Verdana", Font.PLAIN, 13));
-
-        _LabelSecurityLength = new JLabel("长度");
-        _LabelSecurityLength.setBounds(292, 24, 58, 17);
-        _PanelProtectionBits.add(_LabelSecurityLength);
-        _LabelSecurityLength.setFont(new Font("宋体", Font.BOLD, 14));
-
-        _LabelDataProtectionBits = new JLabel("数据");
-        _LabelDataProtectionBits.setHorizontalAlignment(SwingConstants.RIGHT);
-        _LabelDataProtectionBits.setFont(new Font("宋体", Font.BOLD, 14));
-        _LabelDataProtectionBits.setBounds(10, 57, 84, 21);
-        _PanelProtectionBits.add(_LabelDataProtectionBits);
-
-        _LabelProtectionBits = new JLabel("保护区数据");
-        _LabelProtectionBits.setBounds(10, 133, 85, 21);
-        _PanelProtectionBits.add(_LabelProtectionBits);
-        _LabelProtectionBits.setHorizontalAlignment(SwingConstants.RIGHT);
-        _LabelProtectionBits.setFont(new Font("宋体", Font.BOLD, 14));
-
-        _ScrollPanelDataProtectionBits = new JScrollPane();
-        _ScrollPanelDataProtectionBits.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
-        _ScrollPanelDataProtectionBits.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        _ScrollPanelDataProtectionBits.setBounds(104, 57, 301, 67);
-        _PanelProtectionBits.add(_ScrollPanelDataProtectionBits);
-
-        _TextAreaDataProtectionBits = new JTextArea();
-        _TextAreaDataProtectionBits.setText("");
-        _TextAreaDataProtectionBits.setLineWrap(true);
-        _TextAreaDataProtectionBits.setFont(new Font("宋体", Font.PLAIN, 13));
-        _ScrollPanelDataProtectionBits.setViewportView(_TextAreaDataProtectionBits);
-
-        _ScrollPanelProtectionBits = new JScrollPane();
-        _ScrollPanelProtectionBits.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
-        _ScrollPanelProtectionBits.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        _ScrollPanelProtectionBits.setBounds(104, 134, 301, 72);
-        _PanelProtectionBits.add(_ScrollPanelProtectionBits);
-
-        _TextAreaProtectionBits = new JTextArea();
-        _TextAreaProtectionBits.setEditable(false);
-        _TextAreaProtectionBits.setText("");
-        _TextAreaProtectionBits.setLineWrap(true);
-        _TextAreaProtectionBits.setFont(new Font("宋体", Font.PLAIN, 13));
-        _ScrollPanelProtectionBits.setViewportView(_TextAreaProtectionBits);
+        _TextFieldSecurityLength.setBounds(290, 53, 45, 25);
+        _PanelDataArea.add(_TextFieldSecurityLength);
 
         _ButtonReadProtectionBits = new JButton("读");
         _ButtonReadProtectionBits.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                readProtectionBits();
-            }
+            public void actionPerformed(ActionEvent e) { readProtectionBits(); }
         });
-        _ButtonReadProtectionBits.setBounds(104, 216, 149, 26);
-        _PanelProtectionBits.add(_ButtonReadProtectionBits);
         _ButtonReadProtectionBits.setFont(new Font("宋体", Font.PLAIN, 14));
+        _ButtonReadProtectionBits.setBounds(360, 50, 70, 26);
+        _PanelDataArea.add(_ButtonReadProtectionBits);
 
         _ButtonWriteProtectionBits = new JButton("写");
         _ButtonWriteProtectionBits.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                writeProtectionBits();
-            }
+            public void actionPerformed(ActionEvent e) { writeProtectionBits(); }
         });
-        _ButtonWriteProtectionBits.setBounds(256, 216, 149, 26);
-        _PanelProtectionBits.add(_ButtonWriteProtectionBits);
         _ButtonWriteProtectionBits.setFont(new Font("宋体", Font.PLAIN, 14));
+        _ButtonWriteProtectionBits.setBounds(440, 50, 70, 26);
+        _PanelDataArea.add(_ButtonWriteProtectionBits);
+
+        _PanelDataGrid = new JPanel(new GridLayout(16, 16, 1, 1));
+        _PanelDataGrid.setBackground(Color.WHITE);
+        for (int row = 0; row < 16; row++) {
+            for (int col = 0; col < 16; col++) {
+                JTextField field = new JTextField();
+                field.setFont(new Font("Courier New", Font.PLAIN, 13));
+                field.setHorizontalAlignment(JTextField.CENTER);
+                field.setDocument(new HexDocument());
+                _DataGrid[row][col] = field;
+                _PanelDataGrid.add(field);
+            }
+        }
+
+        _ScrollPanelDataGrid = new JScrollPane(_PanelDataGrid);
+        _ScrollPanelDataGrid.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
+        _ScrollPanelDataGrid.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        _ScrollPanelDataGrid.setBounds(8, 85, 808, 548);
+        _PanelDataArea.add(_ScrollPanelDataGrid);
+
+        setupGridSelection();
 
         _LabelApduLogs = new JLabel("操作日志");
         _LabelApduLogs.setFont(new Font("宋体", Font.BOLD, 15));
-        _LabelApduLogs.setBounds(436, 32, 73, 22);
+        _LabelApduLogs.setBounds(845, 62, 73, 22);
         getContentPane().add(_LabelApduLogs);
 
         _ButtonClear = new JButton("清除");
@@ -503,7 +414,7 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
             }
         });
         _ButtonClear.setFont(new Font("宋体", Font.BOLD, 15));
-        _ButtonClear.setBounds(425, 704, 125, 27);
+        _ButtonClear.setBounds(845, 910, 125, 27);
         getContentPane().add(_ButtonClear);
 
         _ButtonReset = new JButton("重置");
@@ -514,7 +425,7 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
             }
         });
         _ButtonReset.setFont(new Font("宋体", Font.BOLD, 15));
-        _ButtonReset.setBounds(561, 704, 131, 27);
+        _ButtonReset.setBounds(980, 910, 131, 27);
         getContentPane().add(_ButtonReset);
 
         _ButtonQuit = new JButton("退出");
@@ -525,28 +436,8 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
             }
         });
         _ButtonQuit.setFont(new Font("宋体", Font.BOLD, 15));
-        _ButtonQuit.setBounds(702, 704, 125, 27);
+        _ButtonQuit.setBounds(1121, 910, 125, 27);
         getContentPane().add(_ButtonQuit);
-
-        _ButtonImportFile = new JButton("导入文件并写入");
-        _ButtonImportFile.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                ImportFile();
-            }
-        });
-        _ButtonImportFile.setFont(new Font("宋体", Font.PLAIN, 14));
-        _ButtonImportFile.setBounds(256, 188, 149, 26);
-        _PanelReadWriteMemoryCard.add(_ButtonImportFile);
-
-        _ButtonExportFile = new JButton("读取数据并导出");
-        _ButtonExportFile.setFont(new Font("宋体", Font.PLAIN, 14));
-        _ButtonExportFile.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                ExportFile();
-            }
-        });
-        _ButtonExportFile.setBounds(104, 188, 149, 26);
-        _PanelReadWriteMemoryCard.add(_ButtonExportFile);
 
         //Add event for text boxes
         _TextFieldAddress1.addKeyListener(this);
@@ -559,8 +450,6 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
         _TextFieldSecurityAddress1.addKeyListener(this);
         _TextFieldSecurityAddress2.addKeyListener(this);
         _TextFieldSecurityLength.addKeyListener(this);
-        _TextAreaDataMemoryCard.addKeyListener(this);
-        _TextAreaDataProtectionBits.addKeyListener(this);
 
         //Disable Copy/Paste for text boxes
         _TextFieldAddress1.setTransferHandler(null);
@@ -569,53 +458,59 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
         _TextFieldCode2.setTransferHandler(null);
         _TextFieldCode3.setTransferHandler(null);
         _TextFieldLength.setTransferHandler(null);
-        _TextAreaDataMemoryCard.setTransferHandler(null);
 
 
-        _TextAreaProtectionBits.setTransferHandler(null);
         _TextFieldRetriesLeft.setTransferHandler(null);
         _TextFieldSecurityAddress1.setTransferHandler(null);
         _TextFieldSecurityAddress2.setTransferHandler(null);
         _TextFieldSecurityLength.setTransferHandler(null);
-        _TextAreaDataProtectionBits.setTransferHandler(null);
 
         _TextAreaApduLogs = new JTextArea();
         _TextAreaApduLogs.setLineWrap(true);
         _TextAreaApduLogs.setEditable(false);
-        _TextAreaApduLogs.setBounds(431, 88, 400, 631);
+        _TextAreaApduLogs.setBounds(845, 88, 400, 810);
         _TextAreaApduLogs.setText("");
         _TextAreaApduLogs.setFont(new Font("宋体", Font.PLAIN, 13));
 
         _ScrollPanelApduLogs = new JScrollPane();
         _ScrollPanelApduLogs.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
         _ScrollPanelApduLogs.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        _ScrollPanelApduLogs.setBounds(430, 63, 415, 631);
+        _ScrollPanelApduLogs.setBounds(845, 88, 400, 810);
         getContentPane().add(_ScrollPanelApduLogs);
         _ScrollPanelApduLogs.setViewportView(_TextAreaApduLogs);
 
-        chooser = new JFileChooser(".");
-        chooser.setFileFilter(new FileFilter() {
-            @Override
-            public boolean accept(File f) {
-                if (f.getName().endsWith("hex") || f.getName().endsWith("dump") || f.getName().endsWith("lcb")) {
-                    return true;
-                } else {
-                    return false;
-                }
-            }
-
-            @Override
-            public String getDescription() {
-                return "十六进制文件(.hex、.dump、.lcb)";
-            }
-        });
-
-        fileinframe = new JFrame("打开文件");
-        fileoutframe = new JFrame("文件另存为");
-
-
         // Instantiate class
         _acr39x = new Acr39();
+
+        _validator = new MemoryCardValidator(_ComboBoxCardTypeList,
+                _TextFieldAddress1, _TextFieldAddress2,
+                _TextFieldCode1, _TextFieldCode2, _TextFieldCode3,
+                _TextFieldLength,
+                _TextFieldSecurityAddress1, _TextFieldSecurityAddress2,
+                _TextFieldSecurityLength,
+                new MemoryCardValidator.ErrorHandler() {
+                    public void showError(String msg) { showErrorMessage(msg); }
+                });
+
+        _operations = new MemoryCardOperations(_acr39x,
+                _ComboBoxCardTypeList, _ComboBoxReaderList,
+                _TextFieldAddress1, _TextFieldAddress2,
+                _TextFieldCode1, _TextFieldCode2, _TextFieldCode3,
+                _TextFieldLength, _TextFieldRetriesLeft,
+                _TextFieldSecurityAddress1, _TextFieldSecurityAddress2,
+                _TextFieldSecurityLength,
+                _DataGrid,
+                _validator,
+                new MemoryCardOperations.UiCallback() {
+                    public void addTitleToLog(String msg) { MemoryCardProgramming.this.addTitleToLog(msg); }
+                    public void addMessageToLog(String msg) { MemoryCardProgramming.this.addMessageToLog(msg); }
+                    public void showError(String msg) { showErrorMessage(msg); }
+                    public void showInfo(String msg) { showInformationMessage(msg); }
+                    public void enableConnect(boolean enable) { MemoryCardProgramming.this.enableConnect(enable); }
+                    public void enableChangeAndWrite(boolean enable) { MemoryCardProgramming.this.enableChangeAndWrite(enable); }
+                    public void resetReaderList() { _ComboBoxReaderList.removeAllItems(); }
+                    public void addReaderItem(String item) { _ComboBoxReaderList.addItem(item); }
+                });
 
 
         //Initialize Form
@@ -626,539 +521,135 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
 
         // Register the event handler implementation of this class
         _acr39x.getEventHandler().addEventListener(this);
+
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(new KeyEventDispatcher() {
+            public boolean dispatchKeyEvent(KeyEvent e) {
+                if (e.getID() != KeyEvent.KEY_PRESSED) return false;
+                Component focused = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+                if (focused == null) return false;
+                boolean isGridCell = false;
+                for (int r = 0; r < 16 && !isGridCell; r++)
+                    for (int c = 0; c < 16 && !isGridCell; c++)
+                        if (_DataGrid[r][c] == focused) isGridCell = true;
+                if (!isGridCell) return false;
+
+                if (e.isControlDown()) {
+                    int code = e.getKeyCode();
+                    if (code == KeyEvent.VK_A) {
+                        e.consume();
+                        _selRowStart = 0; _selColStart = 0;
+                        _selRowEnd = 15; _selColEnd = 15;
+                        clearGridHighlight();
+                        highlightGridRange(0, 0, 15, 15);
+                        return true;
+                    }
+                    if (code == KeyEvent.VK_C) {
+                        e.consume();
+                        copyGridSelection();
+                        return true;
+                    }
+                    if (code == KeyEvent.VK_V) {
+                        e.consume();
+                        pasteGridSelection();
+                        return true;
+                    }
+                }
+                return false;
+            }
+        });
     }
 
     //********************************************CARD OPERATIONS********************************************//
 
     private void initialize() {
-        try {
-            String[] readerList;
-            int index;
-
-            _ComboBoxReaderList.removeAllItems();
-
-            readerList = _acr39x.listTerminals();
-
-            for (index = 0; index < readerList.length; index++) {
-                if (!readerList.equals(""))
-                    _ComboBoxReaderList.addItem(readerList[index]);
-                else
-                    break;
-            }
-
-            if (_ComboBoxReaderList.getItemCount() > 0){
-                _ComboBoxReaderList.setSelectedIndex(0);
-                addMessageToLog("\r\n初始化成功");
-                enableConnect(true);
-            }else{
-                showErrorMessage("未找到读卡器");
-            }
-
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
-    }
-
-    private boolean isSleCard() {
-        boolean isCardValid = false;
-        String cardName = "";
-        byte[] atr = null;
-        CardSelector cardSelector;
-
-        try {
-            cardSelector = new CardSelector(_acr39x);
-            atr = _acr39x.getAtr();
-            cardName = cardSelector.readCardType(atr);
-
-            if (cardName != "存储卡") {
-                showErrorMessage("不支持的卡片.\r\n请使用 " + _ComboBoxCardTypeList.getSelectedItem().toString() + " 卡.");
-                return false;
-            }
-
-            addTitleToLog("已选择卡片的类型");
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528)
-                _sle.selectCardType(Sle.CARD_TYPE.SLE_5528);
-            else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542)
-                _sle.selectCardType(Sle.CARD_TYPE.SLE_5542);
-
-            if (!getCardInformation()) {
-                showErrorMessage("不支持的卡片类型. \r\n请使用 " + _ComboBoxCardTypeList.getSelectedItem().toString() + " 卡.");
-                enableControls(false);
-                return false;
-            }
-
-            isCardValid = true;
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
-
-        return isCardValid;
+        _operations.initialize();
     }
 
     private void connect() {
-        try {
-            if (_ComboBoxReaderList.getSelectedIndex() < 0) {
-                showErrorMessage("请选择读卡器.");
-                enableControls(false);
-                return;
-            }
-
-            _acr39x.connect(_ComboBoxReaderList.getSelectedItem().toString(), "*");
-
-            addMessageToLog("\r\n成功连接至 " + _ComboBoxReaderList.getSelectedItem());
-
-            //Initialize Sle Class
-            _sle = new Sle(_acr39x);
-
-            if (!isSleCard()) {
-                return;
-            }
-
+        _operations.connect();
+        _fileHandler = _operations.getFileHandler();
+        _isConnectionActive = _operations.isConnectionActive();
+        if (_isConnectionActive) {
             enableControls(true);
-            enableChangeAndWrite(false);
             disableTextFields();
-            _ComboBoxCardTypeList.setEnabled(false);
-
-            _isConnectionActive = true;
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
+            enableChangeAndWrite(false);
         }
-
-    }
-
-    private boolean getCardInformation() {
-        boolean isCardValid = false;
-        byte[] cardInformation = new byte[12];
-        Sle.PROTOCOL_TYPE protocolType;
-        Sle.DATA_UNITS dataUnits;
-
-        try {
-            addTitleToLog("获取卡片信息中......");
-
-            cardInformation = _sle.getCardInformation();
-
-            addMessageToLog("\n卡片ID为: " + String.format("%02X", cardInformation[IC_MANUFACTURER_ID_INDEX]));
-
-            if (cardInformation[IC_TYPE_INDEX] == Sle.IC_TYPE.SLE_5528.getIcType()) {
-                addMessageToLog("卡片类型: SLE4418 / SLE4428 / SLE5528");
-                isCardValid = true;
-            } else if (cardInformation[IC_TYPE_INDEX] == Sle.IC_TYPE.SLE_5542.getIcType()) {
-                addMessageToLog("卡片类型: SLE4432 / SLE4442 / SLE5542");
-                isCardValid = true;
-            } else {
-                addMessageToLog("卡片类型未知");
-                isCardValid = false;
-            }
-
-            addMessageToLog("卡片应用ID: " + Helper.byteArrayToString(cardInformation, APPLICATION_ID_START_INDEX, APPLICATION_ID_LENGTH, true));
-
-            protocolType = _sle.getProtocolType(cardInformation[PROTOCOL_TYPE_INDEX]);
-
-            getProtocolType(protocolType);
-
-            dataUnits = _sle.getDataUnits(cardInformation[DATA_UNITS_INDEX]);
-
-            getDataUnits(dataUnits);
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
-
-        return isCardValid;
     }
 
     private void submitCode() {
-        byte[] errorCounter = new byte[1];
-        byte[] code;
-        BitSet temporaryErrorCounter;
-        int counter, retriesLeft = 0;
-
-        try {
-            if (!validateCodeFields())
-                return;
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542)
-                code = new byte[3];
-            else
-                code = new byte[2];
-
-            code[0] = (byte) ((Integer) Integer.parseInt(_TextFieldCode1.getText(), 16)).byteValue();
-            code[1] = (byte) ((Integer) Integer.parseInt(_TextFieldCode2.getText(), 16)).byteValue();
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542)
-                code[2] = (byte) ((Integer) Integer.parseInt(_TextFieldCode3.getText(), 16)).byteValue();
-
-            addTitleToLog("正在确认密码......");
-
-            errorCounter[0] = _sle.presentCode(code);
-            temporaryErrorCounter = BitSet.valueOf(errorCounter);
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-                for (counter = 0; counter < temporaryErrorCounter.length(); counter++) {
-                    if (temporaryErrorCounter.get(counter) == true)
-                        retriesLeft++;
-                }
-
-                enableChangeAndWrite(false);
-                _TextFieldRetriesLeft.setText(Integer.toString(retriesLeft));
-
-                if (retriesLeft == 0)
-                    showErrorMessage("卡片已被锁死.");
-                else if (retriesLeft != SLE5523_ERROR_COUNT)
-                    showErrorMessage("输入密码错误. 剩余错误计数为" + Integer.toString(retriesLeft) + " 次.");
-                else if (retriesLeft == SLE5523_ERROR_COUNT)
-                    enableChangeAndWrite(true);
-            } else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542) {
-                for (counter = 0; counter < errorCounter[0]; counter++) {
-                    if (temporaryErrorCounter.get(counter) == true)
-                        retriesLeft++;
-                }
-
-                enableChangeAndWrite(false);
-                _TextFieldRetriesLeft.setText(Integer.toString(retriesLeft));
-
-                if (retriesLeft == 0)
-                    showErrorMessage("卡片已被锁死.");
-                else if (retriesLeft != SLE5542_ERROR_COUNT)
-                    showErrorMessage("输入密码错误.卡片剩余错误计数为 " + Integer.toString(retriesLeft) + " 次.");
-                else if (retriesLeft == SLE5542_ERROR_COUNT)
-                    enableChangeAndWrite(true);
-            }
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
+        _operations.submitCode();
     }
 
     private void changeCode() {
-        byte[] code;
-
-        try {
-            if (!validateCodeFields())
-                return;
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542)
-                code = new byte[3];
-            else
-                code = new byte[2];
-
-            code[0] = (byte) ((Integer) Integer.parseInt(_TextFieldCode1.getText(), 16)).byteValue();
-            code[1] = (byte) ((Integer) Integer.parseInt(_TextFieldCode2.getText(), 16)).byteValue();
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542)
-                code[2] = (byte) ((Integer) Integer.parseInt(_TextFieldCode3.getText(), 16)).byteValue();
-
-            addTitleToLog("修改密码中......");
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528)
-                _sle.writeMemoryCard(new byte[]{0x03, (byte) 0xFD}, new byte[]{(byte) 0xFF, code[0], code[1]}, (byte) 0x03);
-            else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542)
-                _sle.changeCode(code);
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
+        _operations.changeCode();
     }
 
     private void getReadErrorCount() {
-        byte[] errorCounter = new byte[1];
-        BitSet temporaryErrorCounter;
-        int counter, count = 0;
-
-        try {
-            addTitleToLog("读错误计数中......");
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528)
-                errorCounter[0] = _sle.readErrorCounter((byte) 0x03);
-            else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542)
-                errorCounter[0] = _sle.readErrorCounter((byte) 0x04);
-
-            temporaryErrorCounter = BitSet.valueOf(errorCounter);
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-                for (counter = 0; counter < temporaryErrorCounter.length(); counter++) {
-                    if (temporaryErrorCounter.get(counter) == true)
-                        count++;
-                }
-            } else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542) {
-                for (counter = 0; counter < errorCounter[0]; counter++) {
-                    if (temporaryErrorCounter.get(counter) == true)
-                        count++;
-                }
-            }
-
-            _TextFieldRetriesLeft.setText(Integer.toString(count));
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
+        _operations.getReadErrorCount();
     }
 
     private void readMemoryCard() {
-        byte[] address = new byte[2];
-        byte[] data = null;
-        byte length;
-
-        try {
-            if (!validateReadWriteFields())
-                return;
-
-            address[0] = (byte) ((Integer) Integer.parseInt(_TextFieldAddress1.getText(), 16)).byteValue();
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528)
-                address[1] = (byte) ((Integer) Integer.parseInt(_TextFieldAddress2.getText(), 16)).byteValue();
-
-            length = (byte) ((Integer) Integer.parseInt(_TextFieldLength.getText(), 16)).byteValue();
-
-            if (!validateMemoryCardAddress(address, length, CARD_OPERATIONS.READ_MEMORY_CARD))
-                return;
-
-            addTitleToLog("读磁卡数据中......");
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-                data = _sle.readMemoryCard(address, length);
-            } else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542) {
-                data = _sle.readMemoryCard(address[0], length);
-            }
-
-            _TextAreaDataMemoryCard.setText(Helper.byteArrayToString(data));
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
+        _operations.readMemoryCard();
     }
 
     private void writeMemoryCard() {
-        byte[] address = new byte[2];
-        byte[] data;
-        byte length;
-        String temporaryData;
-//		int counter;
-
-        try {
-            if (!validateReadWriteFields())
-                return;
-
-            if (_TextAreaDataMemoryCard.getText().trim().equals("")) {
-                showErrorMessage("请输入数据.");
-                _TextAreaDataMemoryCard.requestFocus();
-                return;
-            }
-
-            address[0] = (byte) ((Integer) Integer.parseInt(_TextFieldAddress1.getText(), 16)).byteValue();
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528)
-                address[1] = (byte) ((Integer) Integer.parseInt(_TextFieldAddress2.getText(), 16)).byteValue();
-
-            length = (byte) ((Integer) Integer.parseInt(_TextFieldLength.getText(), 16)).byteValue();
-
-            if (!validateMemoryCardAddress(address, length, CARD_OPERATIONS.WRITE_MEMORY_CARD))
-                return;
-
-            temporaryData = _TextAreaDataMemoryCard.getText();
-
-            data = new byte[length & 0xFF];
-
-            data = Helper.getBytes(temporaryData);
-
-            addTitleToLog("写磁卡数据中......");
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528)
-                _sle.writeMemoryCard(address, data, length);
-            else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542)
-                _sle.writeMemoryCard(address[0], data, length);
-
-            _TextAreaDataMemoryCard.setText("");
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
+        _operations.writeMemoryCard();
     }
 
     private void readProtectionBits() {
-        byte[] address = new byte[2];
-        byte[] protectionBits = null;
-        byte length;
-
-        try {
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542) {
-                addTitleToLog("读保护区数据中......");
-
-                protectionBits = _sle.readProtectionBits();
-            } else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-                if (!validateProtectionBitsFields())
-                    return;
-
-                address[0] = (byte) ((Integer) Integer.parseInt(_TextFieldSecurityAddress1.getText(), 16)).byteValue();
-                address[1] = (byte) ((Integer) Integer.parseInt(_TextFieldSecurityAddress2.getText(), 16)).byteValue();
-                length = (byte) ((Integer) Integer.parseInt(_TextFieldSecurityLength.getText(), 16)).byteValue();
-
-                if (!validateProtectionBitsAddress(address, length, CARD_OPERATIONS.READ_PROTECTION_BITS))
-                    return;
-
-                addTitleToLog("读保护区数据中......");
-
-                protectionBits = _sle.readProtectionBits(address, length);
-            }
-
-            _TextAreaProtectionBits.setText(Helper.byteAsString(protectionBits, true));
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
+        _operations.readProtectionBits();
     }
 
     private void writeProtectionBits() {
-        byte[] address = new byte[2];
-        byte[] protectionBits;
-        byte length;
-        String temporaryProtectionBits;
-
-        try {
-            if (!validateProtectionBitsFields())
-                return;
-
-            if (_TextAreaDataProtectionBits.getText().trim().equals("")) {
-                showErrorMessage("请输入数据.");
-                _TextAreaDataProtectionBits.requestFocus();
-                return;
-            }
-
-            address[0] = (byte) ((Integer) Integer.parseInt(_TextFieldSecurityAddress1.getText(), 16)).byteValue();
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528)
-                address[1] = (byte) ((Integer) Integer.parseInt(_TextFieldSecurityAddress2.getText(), 16)).byteValue();
-
-            length = (byte) ((Integer) Integer.parseInt(_TextFieldSecurityLength.getText(), 16)).byteValue();
-
-            if (!validateProtectionBitsAddress(address, length, CARD_OPERATIONS.WRITE_PROTECTION_BITS))
-                return;
-
-            protectionBits = new byte[length & 0xFF];
-
-            temporaryProtectionBits = _TextAreaDataProtectionBits.getText();
-
-            protectionBits = Helper.getBytes(temporaryProtectionBits);
-
-            showInformationMessage("注意：只有新旧数据相同时，才会写入保护位.");
-
-            addTitleToLog("写保护区数据中......");
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528)
-                _sle.writeProtectionBits(address, protectionBits, length);
-            else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542)
-                _sle.writeProtectionBits(address[0], protectionBits, length);
-
-            _TextAreaDataProtectionBits.setText("");
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
+        _operations.writeProtectionBits();
     }
 
     private void disconnect() {
-        try {
-            if (_isConnectionActive) {
-                _acr39x.disconnect();
-                _isConnectionActive = false;
-            }
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
+        _operations.disconnect();
+        _isConnectionActive = _operations.isConnectionActive();
     }
 
-    private static String getclipboard() {
-        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-        Transferable trans = clipboard.getContents(null);
-        String text;
-        try {
-            text = (String) trans.getTransferData(DataFlavor.stringFlavor);
-            return text;
-        } catch (Exception e) {
-            text = null;
-        }
-        return text;
-    }
 
-    private static void setclipboard(String text) {
-        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-        Transferable trans = new StringSelection(text);
-        clipboard.setContents(trans, null);
-    }
     
     private void ImportFile() {
-        byte[] data;
-
-        chooser.showOpenDialog(fileinframe);
-        File file = chooser.getSelectedFile();
-        data = readfile(file);
-
-        boolean r = writeallbytes(data);
-        if (r) {
-            addTitleToLog("读文件及写卡成功");
-        } else {
-            showErrorMessage("读文件及写卡失败，请检查文件或卡片");
+        File file = _fileHandler.showImportDialog();
+        if (file == null) return;
+        byte[] data = _fileHandler.readFile(file);
+        if (data == null) {
+            showErrorMessage("读取文件失败");
+            return;
         }
-
-
+        new SwingWorker<Boolean, Void>() {
+            @Override
+            protected Boolean doInBackground() {
+                return _fileHandler.writeAllBytes(data);
+            }
+            @Override
+            protected void done() {
+                try {
+                    if (get()) {
+                        addTitleToLog("读文件及写卡成功");
+                    } else {
+                        showErrorMessage("读文件及写卡失败，请检查文件或卡片");
+                    }
+                } catch (Exception e) {
+                    showErrorMessage(e.getMessage());
+                }
+            }
+        }.execute();
     }
 
     private void ExportFile() {
-        boolean result;
-        byte[] data;
-        try {
-            chooser.showSaveDialog(fileoutframe);
-            File f = chooser.getSelectedFile();
-            String fname = f.getName();
-            File file = new File(chooser.getCurrentDirectory() + "/" + fname + ".dump");
-            readallbytes();
-
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-                data = data4428;
+        File file = _fileHandler.showExportDialog();
+        if (file == null) return;
+        int cardType = _ComboBoxCardTypeList.getSelectedIndex();
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() {
+                _fileHandler.readAllBytes();
+                byte[] data = _fileHandler.getExportedData(cardType);
                 if (data != null) {
-                    result = writefile(data, file);
-                    if (result == true) {
+                    if (_fileHandler.writeFile(data, file)) {
                         addTitleToLog("导出文件成功");
                     } else {
                         addTitleToLog("导出文件失败");
@@ -1166,397 +657,17 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
                 } else {
                     addTitleToLog("获取到的数据为空，请检查卡片重新操作");
                 }
-            } else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542) {
-                data = data4442;
-                if (data != null) {
-                    result = writefile(data, file);
-                    if (result == true) {
-                        addTitleToLog("导出文件成功");
-                    } else {
-                        addTitleToLog("导出文件失败");
-                    }
-                } else {
-                    addTitleToLog("获取到的数据为空，请检查卡片重新操作");
+                return null;
+            }
+            @Override
+            protected void done() {
+                try {
+                    get();
+                } catch (Exception e) {
+                    showErrorMessage("导出文件未成功，请检查操作日志");
                 }
             }
-
-
-        } catch (Exception e) {
-            showErrorMessage("导出文件未成功，请检查操作日志");
-        }
-    }
-
-    public void readallbytes() {
-        apdu = new Apdu();
-        try {
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-                data1 = _sle.readMemoryCard(add4428_1, (byte) 0xff);
-                data2 = _sle.readMemoryCard(add4428_2, (byte) 0xff);
-                data3 = _sle.readMemoryCard(add4428_3, (byte) 0xff);
-                data4 = _sle.readMemoryCard(add4428_4, (byte) 0xff);
-                data5 = _sle.readMemoryCard(add4428_5, (byte) 0x01);
-
-                data4428 = addbytes(data1, data2, data3, data4, data5);
-
-            } else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542) {
-                data1 = _sle.readMemoryCard(add4442_1, (byte) 0xff);
-                data5 = _sle.readMemoryCard(add4442_2, (byte) 0x01);
-
-                data4442 = addbytes(data1, data5);
-            }
-        } catch (CardException ex) {
-            addTitleToLog(PcscProvider.getScardErrorMessage(ex));
-            showErrorMessage(PcscProvider.getScardErrorMessage(ex));
-        } catch (Exception ex) {
-            addMessageToLog(ex.getMessage());
-            showErrorMessage(ex.getMessage());
-        }
-    }
-
-    public boolean writeallbytes(byte[] data) {
-        apdu = new Apdu();
-        try {
-            if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-                if (data.length >= 1021 && data.length <= 1024) {
-                    addTitleToLog("写第一段数据中......");
-                    data1 = subbytes(data, 0, 255);
-                    _sle.writeMemoryCard(add4428_1,data1,(byte)0xff);
-
-                    addTitleToLog("写第二段数据中......");
-                    data2 = subbytes(data, 255, 255);
-                    _sle.writeMemoryCard(add4428_2,data2,(byte)0xff);
-
-                    addTitleToLog("写第三段数据中......");
-                    data3 = subbytes(data, 510, 255);
-                    _sle.writeMemoryCard(add4428_3,data3,(byte)0xff);
-
-                    addTitleToLog("写第四段数据中......");
-                    data4 = subbytes(data, 765, 255);
-                    _sle.writeMemoryCard(add4428_4,data4,(byte)0xff);
-
-                    addTitleToLog("写第五段数据中......");
-                    data5 = subbytes(data, 1020, 1);
-                    _sle.writeMemoryCard(add4428_5,data5,(byte)0x01);
-
-                    return true;
-
-                } else {
-                    showErrorMessage("文件内数据长度非1024或1021字节，请检查文件");
-                    return false;
-                }
-
-
-            } else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542) {
-                if (data.length == 256) {
-                    data1 = subbytes(data, 0, 255);
-                    data5 = subbytes(data, 255, 1);
-
-                    addTitleToLog("写第一段数据中......");
-                    _sle.writeMemoryCard(add4442_1,data1,(byte)0xff);
-
-                    addTitleToLog("写第二段数据中......");
-                    _sle.writeMemoryCard(add4442_2,data5,(byte)0x01);
-                    return true;
-
-                } else {
-                    showErrorMessage("文件内数据长度非256字节，请检查文件");
-                    return false;
-                }
-            }
-        } catch (CardException ex) {
-            return false;
-        } catch (Exception ex) {
-            return false;
-        }
-        return false;
-    }
-
-    public byte[] subbytes(byte[] data, int begin, int count) {
-        byte[] result = new byte[count];
-        for (int i = begin; i < begin + count; i++) {
-            result[i - begin] = data[i];
-        }
-        return result;
-    }
-
-    public byte[] addbytes(byte[] data1, byte[] data2) {
-        byte[] result = new byte[data1.length + data2.length];
-        System.arraycopy(data1, 0, result, 0, data1.length);
-        System.arraycopy(data2, 0, result, data1.length, data2.length);
-        return result;
-    }
-
-    public byte[] addbytes(byte[] data1, byte[] data2, byte[] data3, byte[] data4, byte[] data5) {
-        byte[] result = new byte[data1.length + data2.length + data3.length + data4.length + data5.length];
-        System.arraycopy(data1, 0, result, 0, data1.length);
-        System.arraycopy(data2, 0, result, data1.length, data2.length);
-        System.arraycopy(data3, 0, result, data1.length + data2.length, data3.length);
-        System.arraycopy(data4, 0, result, data1.length + data2.length + data3.length, data4.length);
-        System.arraycopy(data5, 0, result, data1.length + data2.length + data3.length + data4.length, data5.length);
-        return result;
-    }
-
-    public boolean writefile(byte[] data, File file) {
-        try {
-            FileOutputStream fos = new FileOutputStream(file);
-
-            if (file.exists()) {
-                fos.write(data);
-                fos.close();
-                return true;
-            } else {
-                file.createNewFile();
-                fos.write(data);
-                fos.close();
-                return true;
-            }
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    public byte[] readfile(File file) {
-        try {
-            FileInputStream fis = new FileInputStream(file);
-
-            byte[] a = new byte[(int) file.length()];
-            fis.read(a);
-            fis.close();
-            return a;
-        } catch (IOException e) {
-            return null;
-        }
-    }
-    //********************************************VALIDATION********************************************//
-
-    private boolean validateCodeFields() {
-        if (_TextFieldCode1.getText().trim().equals("")) {
-            showErrorMessage("请输入合法的16进制数据.");
-            _TextFieldCode1.requestFocus();
-            return false;
-        }
-
-        if (_TextFieldCode1.getText().length() == 1) {
-            showErrorMessage("数据输入错误.可允许范围01----FF");
-            _TextFieldCode1.requestFocus();
-            return false;
-        }
-
-        if (_TextFieldCode2.getText().trim().equals("")) {
-            showErrorMessage("请输入合法的16进制数据.");
-            _TextFieldCode2.requestFocus();
-            return false;
-        }
-
-        if (_TextFieldCode2.getText().length() == 1) {
-            showErrorMessage("数据输入错误.可允许范围01----FF");
-            _TextFieldCode2.requestFocus();
-            return false;
-        }
-
-        if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542) {
-            if (_TextFieldCode3.getText().trim().equals("")) {
-                showErrorMessage("请输入合法16进制数据.");
-                _TextFieldCode3.requestFocus();
-                return false;
-            }
-
-            if (_TextFieldCode3.getText().length() == 1) {
-                showErrorMessage("数据输入错误.可允许范围01----FF.");
-                _TextFieldCode3.requestFocus();
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private boolean validateReadWriteFields() {
-        byte temporaryLength;
-        int length;
-
-        if (_TextFieldAddress1.getText().trim().equals("")) {
-            showErrorMessage("请输入合法16进制数据.");
-            _TextFieldAddress1.requestFocus();
-            return false;
-        }
-
-        if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-            if (_TextFieldAddress2.getText().trim().equals("")) {
-                showErrorMessage("请输入合法16进制数据.");
-                _TextFieldAddress2.requestFocus();
-                return false;
-            }
-        }
-
-        if (_TextFieldLength.getText().trim().equals("")) {
-            showErrorMessage("请输入合法16进制数据.");
-            _TextFieldLength.requestFocus();
-            return false;
-        }
-
-        temporaryLength = (byte) ((Integer) Integer.parseInt(_TextFieldLength.getText(), 16)).byteValue();
-        length = temporaryLength & 0xFF;
-
-        if (length == 0) {
-            showErrorMessage("数据输入错误.可允许范围01----FF.");
-            _TextFieldLength.requestFocus();
-            return false;
-        }
-
-        return true;
-    }
-
-    private boolean validateProtectionBitsFields() {
-        byte temporaryLength;
-        int length;
-
-        if (_TextFieldSecurityAddress1.getText().trim().equals("")) {
-            showErrorMessage("请输入合法16进制数据.");
-            _TextFieldSecurityAddress1.requestFocus();
-            return false;
-        }
-
-        if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-            if (_TextFieldSecurityAddress2.getText().trim().equals("")) {
-                showErrorMessage("请输入合法16进制数据.");
-                _TextFieldSecurityAddress2.requestFocus();
-                return false;
-            }
-        }
-
-        if (_TextFieldSecurityLength.getText().trim().equals("")) {
-            showErrorMessage("请输入合法16进制数据.");
-            _TextFieldSecurityLength.requestFocus();
-            return false;
-        }
-
-        temporaryLength = (byte) ((Integer) Integer.parseInt(_TextFieldSecurityLength.getText(), 16)).byteValue();
-        length = temporaryLength & 0xFF;
-
-        if (length == 0) {
-            showErrorMessage("数据输入错误.可允许范围01----FF.");
-            _TextFieldSecurityLength.requestFocus();
-            return false;
-        }
-
-        return true;
-    }
-
-    private boolean validateMemoryCardAddress(byte[] address, byte length, CARD_OPERATIONS operationType) {
-        boolean isValidAddress = true;
-
-        if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-            switch (operationType) {
-                case WRITE_MEMORY_CARD:
-                    if ((Helper.byteToInt(address) + (length & 0xFF)) > SLE5528_MAXIMUM_WRITEABLE_RANGE) {
-                        showErrorMessage("指定的地址与长度超出了允许可写的范围. 地址与长度之和不可超过 03FDh.");
-                        isValidAddress = false;
-                    }
-                    break;
-                case READ_MEMORY_CARD:
-                    if ((Helper.byteToInt(address) + (length & 0xFF)) > SLE5528_MAXIMUM_READABLE_RANGE) {
-                        showErrorMessage("指定的地址与长度超出了允许可读的范围. 地址与长度之和不可超过 0400h.");
-                        isValidAddress = false;
-                    }
-                    break;
-                default:
-                    break;
-            }
-        } else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542) {
-            switch (operationType) {
-                case WRITE_MEMORY_CARD:
-                    if ((Helper.byteToInt(address, true) + (length & 0xFF)) > SLE5542_MAXIMUM_WRITEABLE_RANGE) {
-                        showErrorMessage("指定的地址与长度超出了允许可写的范围. 地址与长度之和不可超过 0100h.");
-                        isValidAddress = false;
-                    }
-                    break;
-                case READ_MEMORY_CARD:
-                    if ((Helper.byteToInt(address, true) + (length & 0xFF)) > SLE5542_MAXIMUM_READABLE_RANGE) {
-                        showErrorMessage("指定的地址与长度超出了允许可读的范围. 地址与长度之和不可超过 0100h.");
-                        isValidAddress = false;
-                    }
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        return isValidAddress;
-    }
-
-    private boolean validateProtectionBitsAddress(byte[] address, byte length, CARD_OPERATIONS operationType) {
-        boolean isValidAddress = true;
-
-        if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4418_SLE4428_SLE5528) {
-            switch (operationType) {
-                case WRITE_PROTECTION_BITS:
-                    if ((Helper.byteToInt(address) + (length & 0xFF)) > SLE5528_MAXIMUM_PROTECTION_BITS_RANGE) {
-                        showErrorMessage("指定的地址与长度超出了允许可写的范围. 地址与长度之和不可超过 0400h.");
-                        isValidAddress = false;
-                    }
-                    break;
-                case READ_PROTECTION_BITS:
-                    if ((Helper.byteToInt(address) + (length & 0xFF)) > SLE5528_MAXIMUM_PROTECTION_BITS_RANGE) {
-                        showErrorMessage("指定的地址与长度超出了允许可读的范围. 地址与长度之和不可超过 0400h.");
-                        isValidAddress = false;
-                    }
-                    break;
-                default:
-                    break;
-            }
-        } else if (_ComboBoxCardTypeList.getSelectedIndex() == SLE4432_SLE4442_SLE5542) {
-            switch (operationType) {
-                case WRITE_PROTECTION_BITS:
-                    if ((Helper.byteToInt(address, true) + (length & 0xFF)) > SLE5542_MAXIMUM_PROTECTION_BITS_RANGE) {
-                        showErrorMessage("指定的地址与长度超出了允许可写的范围. 地址与长度之和不可超过 20h.");
-                        isValidAddress = false;
-                    }
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        return isValidAddress;
-    }
-
-    //********************************************HELPER FUNCTIONS********************************************//
-
-    private void getProtocolType(Sle.PROTOCOL_TYPE protocolType) {
-        if (protocolType == Sle.PROTOCOL_TYPE.SERIAL_DATA)
-            addMessageToLog("协议类型: 串行数据访问");
-        else if (protocolType == Sle.PROTOCOL_TYPE.THREE_WIRE)
-            addMessageToLog("协议类型: 三线总线");
-        else if (protocolType == Sle.PROTOCOL_TYPE.TWO_WIRE)
-            addMessageToLog("协议类型: 二线总线");
-        else if (protocolType == Sle.PROTOCOL_TYPE.RFU)
-            addMessageToLog("协议类型: 保留");
-        else if (protocolType == Sle.PROTOCOL_TYPE.RESERVED_MAX)
-            addMessageToLog("协议类型: ISO 保留");
-        else if (protocolType == Sle.PROTOCOL_TYPE.NOT_DEFINED_MAX)
-            addMessageToLog("协议类型: ISO 未定义");
-        else
-            addMessageToLog("协议类型: 未知");
-    }
-
-    private void getDataUnits(Sle.DATA_UNITS dataUnits) {
-        if (dataUnits == Sle.DATA_UNITS.BYTES_128)
-            addMessageToLog("数据单元: 128 字节");
-        else if (dataUnits == Sle.DATA_UNITS.BYTES_256)
-            addMessageToLog("数据单元: 256 字节");
-        else if (dataUnits == Sle.DATA_UNITS.BYTES_512)
-            addMessageToLog("数据单元: 512 字节");
-        else if (dataUnits == Sle.DATA_UNITS.BYTES_1024)
-            addMessageToLog("数据单元: 1024 字节");
-        else if (dataUnits == Sle.DATA_UNITS.BYTES_2048)
-            addMessageToLog("数据单元: 2048 字节");
-        else if (dataUnits == Sle.DATA_UNITS.BYTES_4096)
-            addMessageToLog("数据单元: 4096 字节");
-        else if (dataUnits == Sle.DATA_UNITS.NO_INDICATION)
-            addMessageToLog("数据单元: 未指定");
-        else
-            addMessageToLog("数据单元: 未知");
+        }.execute();
     }
 
     private void resetFields() {
@@ -1568,8 +679,7 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
         _ComboBoxReaderList.removeAllItems();
         _ComboBoxCardTypeList.setSelectedIndex(SLE4432_SLE4442_SLE5542);
         _ComboBoxCardTypeList.setSelectedIndex(SLE4418_SLE4428_SLE5528);
-        _TextAreaDataProtectionBits.setEnabled(false);
-        _TextAreaDataMemoryCard.setEditable(false);
+        setGridEnabled(false);
         _TextAreaApduLogs.setText("");
         addMessageToLog("程序准备就绪");
     }
@@ -1581,18 +691,13 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
 
     private void enableControls(boolean isEnable) {
         _PanelCode.setEnabled(isEnable);
-        _PanelReadWriteMemoryCard.setEnabled(isEnable);
-        _PanelProtectionBits.setEnabled(isEnable);
+        _PanelDataArea.setEnabled(isEnable);
 
         for (Component controls : _PanelCode.getComponents()) {
             controls.setEnabled(isEnable);
         }
 
-        for (Component controls : _PanelReadWriteMemoryCard.getComponents()) {
-            controls.setEnabled(isEnable);
-        }
-
-        for (Component controls : _PanelProtectionBits.getComponents()) {
+        for (Component controls : _PanelDataArea.getComponents()) {
             controls.setEnabled(isEnable);
         }
     }
@@ -1614,8 +719,7 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
         _ButtonWrite.setEnabled(isEnable);
         _ButtonWriteProtectionBits.setEnabled(isEnable);
         _ButtonImportFile.setEnabled(isEnable);
-        _TextAreaDataProtectionBits.setEnabled(isEnable);
-        _TextAreaDataMemoryCard.setEditable(isEnable);
+        setGridEnabled(isEnable);
     }
 
     private void clearTextFields() {
@@ -1629,25 +733,156 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
         _TextFieldSecurityAddress1.setText("");
         _TextFieldSecurityAddress2.setText("");
         _TextFieldSecurityLength.setText("");
-        _TextAreaDataMemoryCard.setText("");
-        _TextAreaDataProtectionBits.setText("");
-        _TextAreaProtectionBits.setText("");
+        clearGrid();
+    }
+
+    private void clearGrid() {
+        for (int row = 0; row < 16; row++) {
+            for (int col = 0; col < 16; col++) {
+                _DataGrid[row][col].setText("");
+            }
+        }
+    }
+
+    private void setGridEnabled(boolean enable) {
+        for (int row = 0; row < 16; row++) {
+            for (int col = 0; col < 16; col++) {
+                _DataGrid[row][col].setEditable(enable);
+            }
+        }
+    }
+
+    byte[] getGridData() {
+        byte[] data = new byte[256];
+        for (int i = 0; i < 256; i++) {
+            String text = _DataGrid[i / 16][i % 16].getText().trim();
+            data[i] = (byte) (text.isEmpty() ? 0 : Integer.parseInt(text, 16));
+        }
+        return data;
+    }
+
+    void setGridBytes(byte[] data) {
+        clearGrid();
+        for (int i = 0; i < data.length && i < 256; i++) {
+            _DataGrid[i / 16][i % 16].setText(String.format("%02X", data[i] & 0xFF));
+        }
+    }
+
+    private void setupGridSelection() {
+        for (int row = 0; row < 16; row++) {
+            for (int col = 0; col < 16; col++) {
+                final int r = row;
+                final int c = col;
+                _DataGrid[row][col].addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mousePressed(MouseEvent e) {
+                        if (SwingUtilities.isLeftMouseButton(e)) {
+                            clearGridHighlight();
+                            _selRowStart = _selRowEnd = r;
+                            _selColStart = _selColEnd = c;
+                            _dragRowAnchor = r;
+                            _dragColAnchor = c;
+                            highlightGridRange(_selRowStart, _selColStart, _selRowEnd, _selColEnd);
+                        }
+                    }
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        if (SwingUtilities.isLeftMouseButton(e) && _dragRowAnchor != -1) {
+                            clearGridHighlight();
+                            _selRowEnd = r;
+                            _selColEnd = c;
+                            highlightGridRange(Math.min(_selRowStart, _selRowEnd), Math.min(_selColStart, _selColEnd),
+                                    Math.max(_selRowStart, _selRowEnd), Math.max(_selColStart, _selColEnd));
+                        }
+                    }
+                    @Override
+                    public void mouseReleased(MouseEvent e) {
+                        _dragRowAnchor = -1;
+                        _dragColAnchor = -1;
+                    }
+                });
+            }
+        }
+    }
+
+    private void clearGridHighlight() {
+        for (int r = 0; r < 16; r++) {
+            for (int c = 0; c < 16; c++) {
+                _DataGrid[r][c].setBackground(Color.WHITE);
+            }
+        }
+    }
+
+    private void highlightGridRange(int rowStart, int colStart, int rowEnd, int colEnd) {
+        for (int r = rowStart; r <= rowEnd; r++) {
+            for (int c = colStart; c <= colEnd; c++) {
+                _DataGrid[r][c].setBackground(Color.CYAN);
+            }
+        }
+    }
+
+    private void copyGridSelection() {
+        if (_selRowStart < 0 || _selColStart < 0) return;
+        int rMin = Math.min(_selRowStart, _selRowEnd);
+        int rMax = Math.max(_selRowStart, _selRowEnd);
+        int cMin = Math.min(_selColStart, _selColEnd);
+        int cMax = Math.max(_selColStart, _selColEnd);
+        StringBuilder sb = new StringBuilder();
+        for (int r = rMin; r <= rMax; r++) {
+            if (r > rMin) sb.append("\n");
+            for (int c = cMin; c <= cMax; c++) {
+                if (c > cMin) sb.append("\t");
+                String text = _DataGrid[r][c].getText().trim();
+                sb.append(text.isEmpty() ? "00" : text);
+            }
+        }
+        StringSelection stringSelection = new StringSelection(sb.toString());
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clipboard.setContents(stringSelection, null);
+    }
+
+    private void pasteGridSelection() {
+        if (_selRowStart < 0 || _selColStart < 0) return;
+        try {
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            String data = (String) clipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor);
+            if (data == null) return;
+            String[] rows = data.split("\n");
+            int startRow = _selRowStart;
+            int startCol = _selColStart;
+            for (int rowIdx = 0; rowIdx < rows.length && startRow + rowIdx < 16; rowIdx++) {
+                String[] cells = rows[rowIdx].split("\t", -1);
+                for (int colIdx = 0; colIdx < cells.length && startCol + colIdx < 16; colIdx++) {
+                    String hex = cells[colIdx].trim();
+                    if (hex.matches("^[0-9A-Fa-f]{1,2}$")) {
+                        hex = hex.length() == 1 ? "0" + hex.toUpperCase() : hex.toUpperCase();
+                        _DataGrid[startRow + rowIdx][startCol + colIdx].setText(hex);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     void addTitleToLog(String message) {
-        _TextAreaApduLogs.append("\r\n" + message + "\r\n");
+        SwingUtilities.invokeLater(() -> {
+            _TextAreaApduLogs.append("\r\n" + message + "\r\n");
+            _TextAreaApduLogs.setCaretPosition(_TextAreaApduLogs.getDocument().getLength());
+        });
     }
 
     void addMessageToLog(String message) {
-        _TextAreaApduLogs.append(message + "\r\n");
+        SwingUtilities.invokeLater(() -> {
+            _TextAreaApduLogs.append(message + "\r\n");
+            _TextAreaApduLogs.setCaretPosition(_TextAreaApduLogs.getDocument().getLength());
+        });
     }
 
     void showInformationMessage(String message) {
-        JOptionPane.showMessageDialog(this, message, "提示信息", JOptionPane.INFORMATION_MESSAGE);
+        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, message, "提示信息", JOptionPane.INFORMATION_MESSAGE));
     }
 
     void showErrorMessage(String message) {
-        JOptionPane.showMessageDialog(this, message, "错误", JOptionPane.ERROR_MESSAGE);
+        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, message, "错误", JOptionPane.ERROR_MESSAGE));
     }
 
     public void onSendCommand(ReaderEvents.TransmitApduEventArg event) {
@@ -1662,29 +897,6 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
     }
 
     public void keyPressed(KeyEvent keyEvent) {
-        if (_TextAreaDataMemoryCard.isFocusOwner()) {
-            if (keyEvent.isControlDown() && keyEvent.getKeyCode() == KeyEvent.VK_V) {
-                String text = getclipboard();
-                _TextAreaDataMemoryCard.append(text);
-            }
-
-            if (keyEvent.isControlDown() && keyEvent.getKeyCode() == KeyEvent.VK_C) {
-                String text = _TextAreaDataMemoryCard.getText();
-                setclipboard(text);
-            }
-        }
-
-        if (_TextAreaDataProtectionBits.isFocusOwner()) {
-            if (keyEvent.isControlDown() && keyEvent.getKeyCode() == KeyEvent.VK_V) {
-                String text = getclipboard();
-                _TextAreaDataProtectionBits.append(text);
-            }
-
-            if (keyEvent.isControlDown() && keyEvent.getKeyCode() == KeyEvent.VK_C) {
-                String text = _TextAreaDataProtectionBits.getText();
-                setclipboard(text);
-            }
-        }
     }
 
     public void keyTyped(KeyEvent keyEvent) {
@@ -1704,10 +916,10 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
 
         //Clear Data when length is changed
         if (_TextFieldLength.isFocusOwner())
-            _TextAreaDataMemoryCard.setText("");
+            clearGrid();
 
         if (_TextFieldSecurityLength.isFocusOwner())
-            _TextAreaDataProtectionBits.setText("");
+            clearGrid();
 
         //Limit character length
         if (_TextFieldCode1.isFocusOwner() || _TextFieldCode2.isFocusOwner() || _TextFieldCode3.isFocusOwner() ||
@@ -1764,5 +976,30 @@ public class MemoryCardProgramming extends JFrame implements ReaderEvents.ITrans
 //				}
 //			}
 //		}
+    }
+}
+
+class HexDocument extends PlainDocument {
+    private static final String HEX_CHARS = "0123456789abcdefABCDEF";
+
+    @Override
+    public void insertString(int offset, String str, AttributeSet attr) throws BadLocationException {
+        if (str == null) return;
+
+        StringBuilder filtered = new StringBuilder();
+        for (char c : str.toCharArray()) {
+            if (HEX_CHARS.indexOf(c) != -1) {
+                filtered.append(Character.toUpperCase(c));
+            }
+        }
+
+        int remaining = 2 - getLength();
+        if (filtered.length() > remaining) {
+            filtered.setLength(remaining);
+        }
+
+        if (filtered.length() > 0) {
+            super.insertString(offset, filtered.toString(), attr);
+        }
     }
 }

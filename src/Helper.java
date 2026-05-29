@@ -33,7 +33,7 @@ public class Helper
 		int index;
 		byte[] temporaryArray;
 		
-		if(b.length < startIndx + len);
+		if(b.length < startIndx + len)
 		{
 			temporaryArray = new byte[len];
 			// resize the array
@@ -293,6 +293,13 @@ public class Helper
 		}
 		
 		return string;
+	}
+
+	public static byte[] subBytes(byte[] data, int begin, int count)
+	{
+		byte[] result = new byte[count];
+		System.arraycopy(data, begin, result, 0, count);
+		return result;
 	}
 
 }
